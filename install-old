@@ -1,0 +1,273 @@
+#!/bin/sh
+ 
+system=`uname -a`
+optEcho=""
+optINET="rpgd\tstream\ttcp\tnowait\troot\t/usr/local/bin/rpgclient"
+case "$system" in
+    OSF1*)
+	machine="alpha"
+	;;
+    Linux*mips*)
+	machine="mips-linux"
+	;;
+    Linux*)
+	machine="linux"
+	optEcho="-e"
+	optINET="rpgd\tstream\ttcp\tnowait\troot\t/usr/sbin/tcpd\t/usr/local/bin/rpgclient"
+	;;
+    HP-UX*)
+	machine="hp700"
+	;;
+    AIX*)
+	machine="rs6000"
+	;;
+    IRIX*)
+	machine="sgi"
+	;;
+    SunOS*5.*sun4*)
+	machine="solaris"
+	;;
+    SunOS*5.*i386*)
+	machine="solarisx86"
+	;;
+    BSD/OS*)
+	machine="bsdi"
+	;;
+    FREEBSD*)
+	machine="freebsd"
+	optEcho="-e"
+	;;
+    SCO_SV*)
+	machine="sco5"
+	;;
+    UnixWare\ *\ *\ 7*\ i*)
+	machine="uware7"
+	;;
+    *)
+	echo "ERROR:  Unsupported platform!  This machine is $system."
+	exit
+	;;
+esac
+
+whoami=`whoami 2>/dev/null` || whoami=`/usr/bin/id | sed -e ' s/).*//; s/^.*(//;'`
+if [ $whoami != "root" ]
+  then
+    echo "ERROR:  Logged in as $whoami.  Must be root to do this installation!"
+    exit
+fi
+
+echo "You are logged in as $whoami on $machine."
+echo "Run the RPG client executable from the Internet as:"
+
+echo -n "[TCP port=7000]: "
+read MYPORT
+if [ "$MYPORT" = "" ]; then
+	MYPORT=7000
+fi
+
+rpgdserv=`grep $MYPORT/tcp /etc/services`
+if [ "$rpgdserv" != "" ]; then
+	servrpgd=`echo $rpgdserv | grep rpgclient`
+	if [ "$servrpgd" = "" ]; then
+		echo "Error!  That port is already in use by:"
+		echo $rpgdserv
+		exit
+	fi
+fi
+
+MYHOME=`pwd`
+echo -n "[HOME=$MYHOME]: "
+read MYHOME
+if [ "$MYHOME" = "" ]; then
+    MYHOME=`pwd`
+fi
+
+echo -n "[GROUP=nobody]: "
+read MYGROUP
+if [ "$MYGROUP" = "" ]; then
+    MYGROUP="nobody"
+fi
+
+echo -n "[USER=nobody]: "
+read MYUSER
+if [ "$MYUSER" = "" ]; then
+    MYUSER="nobody"
+fi
+
+echo "=========================="
+echo "Creating the RPGD binaries"
+echo "=========================="
+
+cd src
+
+echo "Making RPGD Server (rpgd) ..."
+cd rpgd
+if [ "$1" = "clean" ]; then
+    make clean
+fi
+./configure
+make
+make install
+cd ..
+
+echo ""
+echo "Making RPGD Client (rpgclient) ..."
+cd rpgclient
+if [ "$1" = "clean" ]; then
+    make clean
+fi
+./configure
+make
+make install
+cd ..
+
+echo ""
+echo "Making RPGD Watch utility (rpgwatch) ..."
+cd rpgwatch
+if [ "$1" = "clean" ]; then
+    make clean
+fi
+./configure
+make
+make install
+cd ..
+
+echo ""
+echo "Making RPGD Web cgi-bin (rpgweb) ..."
+cd rpgweb
+if [ "$1" = "clean" ]; then
+    make clean
+fi
+./configure
+make
+make install
+cd ..
+
+rpm=`which rpm`
+gtk=""
+if [ -x "$rpm" ]; then
+    gtk=`rpm -q gtk+`
+fi
+if [ "$machine" = "linux" -a "$gtk" != "" ]; then
+    echo ""
+    echo "Making RPGD Sysop utility (sysop) ..."
+    cd sysop/src
+    if [ ! -f Makefile ]; then
+		cp -f Makefile..$machine Makefile
+    fi
+    if [ "$1" = "clean" ]; then
+		make clean
+    fi
+    make
+	make install
+    cd ../..
+fi
+
+echo ""
+echo "Done making the binaries."
+echo ""
+cd ..
+
+echo "================"
+echo "Configuring RPGD"
+echo "================"
+
+echo -n "Making /etc/rpgd.conf... "
+echo "HOME=$MYHOME"    >  /etc/rpgd.conf
+echo "GROUP=$MYGROUP"  >> /etc/rpgd.conf
+echo "USER=$MYUSER"    >> /etc/rpgd.conf
+echo "#DEV=/dev/ttyS1" >> /etc/rpgd.conf
+echo "#COLS=20"        >> /etc/rpgd.conf
+echo "#MINS=30"        >> /etc/rpgd.conf
+echo "Done."
+
+echo -n "Updating /etc/services... "
+rpgdserv=`grep rpgclient /etc/services`
+if [ "$rpgdserv" = "" ]; then
+    echo -e "rpgclient\t\t$MYPORT/tcp\t\t\t# Role-Playing Game" >> /etc/services
+fi
+echo "Done."
+
+echo -n "Assigning privileges... "
+chgrp $MYGROUP $MYHOME
+#chgrp $MYGROUP GANG* USER*
+chgrp -R $MYGROUP etc help log mail menu msg pix snd tmp
+
+chown $MYUSER $MYHOME
+#chown $MYUSER GANG* USER*
+chown -R $whoami bin menu pix snd
+chown -R $MYUSER etc help log mail msg tmp
+
+chmod 664 /etc/rpgd.conf
+chmod 775 $MYHOME
+#chmod 660 GANG* USER*
+chmod -R 755 bin
+chmod -R 660 etc help log mail msg tmp
+chmod 770 etc help log mail msg tmp
+chmod -R 640 menu pix snd
+chmod 750 menu pix pix/* snd
+echo "Done."
+echo ""
+
+echo "=============================="
+echo "Post installation instructions"
+echo "=============================="
+echo "View README file to complete the installation."
+echo "Please visit http://games.microwavesoft.com/rpgd for up-to-date news."
+echo "Happy Hunting!"
+echo ""
+
+
+if [ -f /etc/xinetd.conf ]; then
+	echo -n "Updating /etc/xinetd.conf... "
+	echo "# default: off"                > /etc/xinetd.d/rpgclient
+	echo "# description: The RPGD client allows remote users to login to play" >> /etc/xinetd.d/rpgclient
+	echo "#              Hack & Slash." >> /etc/xinetd.d/rpgclient
+	echo "service rpgclient"            >> /etc/xinetd.d/rpgclient
+	echo "{"                            >> /etc/xinetd.d/rpgclient
+	echo "	disable	= no"               >> /etc/xinetd.d/rpgclient
+	echo "	socket_type		= stream"   >> /etc/xinetd.d/rpgclient
+	echo "	wait			= no"       >> /etc/xinetd.d/rpgclient
+	echo "	user			= root"     >> /etc/xinetd.d/rpgclient
+	echo "	server			= /usr/local/bin/rpgclient" >> /etc/xinetd.d/rpgclient
+	echo "	log_on_success		+= USERID" >> /etc/xinetd.d/rpgclient
+	echo "	log_on_failure		+= USERID" >> /etc/xinetd.d/rpgclient
+	echo "}"                            >> /etc/xinetd.d/rpgclient
+	chmod 644 /etc/xinetd.d/rpgclient
+	echo "Done."
+
+	if [ -x /etc/rc.d/init.d/xinetd ]; then
+    		/etc/rc.d/init.d/xinetd reload
+	fi
+else
+	if [ -f /etc/inetd.conf ]; then
+	    echo -n "Checking /etc/inetd.conf... "
+	    rpgdserv=`grep rpgclient /etc/inetd.conf`
+	    if [ "$rpgdserv" = "" ]; then
+			echo $optEcho $optINET >> /etc/inetd.conf
+		fi
+	fi
+fi
+
+if [ -f /etc/inittab ]; then
+    echo -n "Checking /etc/inittab... "
+    rpgdserv=`grep rpgd /etc/inittab`
+    if [ "$rpgdserv" = "" ]; then
+		echo "rpgd:35:respawn:/usr/local/bin/rpgd -d" >> /etc/inittab
+		telinit q
+	fi
+    echo "Done."
+else
+	chkconfig=`which chkconfig`
+	if [ -x "$chkconfig" ]; then
+		if [ -d /etc/rc.d/init.d ]; then
+		    cp etc/rpgd.rc /etc/rc.d/init.d/rpgd
+		    chkconfig --add /etc/rc.d/init.d/rpgd
+		    chkconfig --level 3 rpgd on
+		    chkconfig --level 5 rpgd on
+		fi
+		if [ -x /etc/rc.d/init.d/rpgd ]; then
+	    		/etc/rc.d/init.d/rpgd restart
+		fi
+	fi
+fi

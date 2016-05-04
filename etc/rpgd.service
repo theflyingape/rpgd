@@ -1,0 +1,17 @@
+[Unit]
+Description=Role-Playing Game Daemon
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/rpgd
+Restart=always
+RestartSec=5
+KillMode=process
+# Some login implementations ignore SIGTERM, so we send SIGHUP
+# instead, to ensure that login terminates cleanly.
+KillSignal=SIGHUP
+
+[Install]
+# place a copy of this file in /etc/systemd/system/multi-user.target.wants
+WantedBy=multi-user.target
+

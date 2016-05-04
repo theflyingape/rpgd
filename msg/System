@@ -1,0 +1,6 @@
+This fine game runs on a Red Hat Fedora 20 Atom quad core server with 4gb RAM
+on a 35mb fiber optic internet service.
+
+The RPGD software was developed on this machine using gcc 4.8.2 and glibc 2.18,
+but as a 32-bit build.
+

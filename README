@@ -1,0 +1,98 @@
+1.  ./autogen.sh
+    ./configure --host=i686-linux-gnu "CFLAGS=-m32" "CXXFLAGS=-m32" "LDFLAGS=-m32"
+    make
+    make install
+
+2.  Make certain you have the file, rpgd.conf, in the directory /etc.  There
+    is a sample rpgd.conf in the rpgd/etc that has in it:
+
+HOME=/usr/local/rpgd
+GROUP=nobody
+USER=nobody
+#DEV=/dev/ttyS1
+#ROWS=4
+#COLS=20
+
+HOME, GROUP, and USER are required for rpgd to run.  rpgd must run as 'root',
+but will change its current work directory to HOME, and its user and group id
+to whatever is specified (nobody).
+
+DEV, ROWS, and COLS are optional parameters to use to dump user logoff 
+statistics to, i.e., to a serial video display in your server.  The # is
+used to comment out this feature.
+
+3.  Make certain rpgd is running.  It should install a line in your server's
+    /etc/inittab, like the following:
+
+# Run rpgd
+rpgd:35:respawn:/usr/local/bin/rpgd -d
+
+You might have to issue a 'telinit q' at the root console prompt to inform
+init that its configuration file has been changed and needs to be re-read.
+
+    For init hosts, copy init/rpgd.conf to /etc/init
+
+    For systemd hosts, copy etc/rpgd.service to
+    /etc/systemd/system/multi-user.target.wants
+
+Check for rpgd by typing:
+
+ps auxw | grep rpg
+
+You can check its log:
+
+cat log/rpgd.log
+
+It should start with:
+rpgd v2.5.7
+(C)1999-2014 Robert Hurst
+All Rights Reserved.
+
+
+4.  Run the rpgclient program or use the 'hack' convenience script.
+    If you get a 'connection refused' error message, that means rpgd is NOT
+    running.
+
+5.  Connecting remotely with the Windows RPGCLIENT.exe program.  By default,
+    rpgclient is on port #7000 and is inserted in your /etc/services file:
+
+grep rpg /etc/services
+
+rpgclient       7000/tcp                        # RPGclient
+
+If that line is not in there, you cannot connect remotely.
+
+By default, an /etc/xinetd.d/rpgclient service script is created:
+
+cat /etc/xinetd.d/rpgclient
+
+# default: off
+# description: The RPGD client allows remote users to login to play
+#              Hack & Slash.
+service rpgclient
+{
+        disable = no
+        socket_type             = stream
+        wait                    = no
+        user                    = root
+        server                  = /usr/local/bin/rpgclient
+        log_on_success          += USERID
+        log_on_failure          += USERID
+}
+
+You might have to restart the xinetd service, such as:
+
+service xinetd restart
+
+6.  Make certain your firewall allows port #7000 to come in.
+
+7.  Make certain that the rpgd binaries are installed in a directory that is
+    part of the root's path, i.e., /usr/local/bin
+
+echo $PATH
+
+/usr/kerberos/sbin:/usr/kerberos/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin:/usr/local/j2sdk1.4.1/bin:/usr/local/Sophos/bin:/root/bin
+
+
+Happy Hunting!
+
